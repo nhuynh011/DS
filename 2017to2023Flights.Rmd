@@ -1,0 +1,53 @@
+---
+title: "Airline data in the United States from 2017 to 2023"
+date: "2023/0/15"
+output: html_notebook
+---
+Today, we make a representation from a specific airline/location about its passengers and the past 6 years.
+
+```{r}
+library(here)
+library(nycflights13)
+library(janitor)
+library(tidyverse)
+```
+
+Now we load our files from the zip. This is from 2017 to May 2023. (https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FIM&QO_fu146_anzr=Nv4+Pn44vr45).
+
+```{r}
+thisfile = here("raw", "DL_SelectFields_2017.zip")
+df2017 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2018.zip")
+df2018 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2019.zip")
+df2019 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2020.zip")
+df2020 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2021.zip")
+df2021 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2022.zip")
+df2022 = read_csv(thisfile) %>% clean_names()
+
+thisfile = here("raw", "DL_SelectFields_2023.zip")
+df2023 = read_csv(thisfile) %>% clean_names()
+```
+
+Finally, we combine all the tables together and assign it to the variable df. Since we only care about the flights with passengers, we are going to filter that out.
+
+```{r}
+df = bind_rows(df2017, df2018, df2019, df2020, df2021, df2022, df2023)
+df = df |> filter(passengers>0)
+```
+
+We want to graph the passengers and months to see which months of which year have what type of pattern.
+
+```{r}
+df2 = df |> filter(origin == "MIA" | dest == "MIA")
+df2= df2 |> mutate(month_year = year+month/12)
+ggplot(data = df2, mapping = aes(month_year)) + geom_histogram(aes(weight=passengers), color="black", fill="lightblue") + scale_x_continuous(breaks=2017:2023)
+```
