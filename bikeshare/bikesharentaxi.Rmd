@@ -1,0 +1,254 @@
+---
+title: "Bikeshare vs Taxi: Pre-COVID and Post-COVID"
+output: html_notebook
+---
+
+We want to look at the Capital Bikeshare program before and after COVID-19 compared to other for-hire vehicles's recovery after COVID-19. Here, we load our library files and data.
+
+```{r}
+library(tidyverse)
+library(here)
+library(janitor)
+library(tmap)
+library(sf)
+library(ggplot2)
+library(plotly)
+
+dfApr20 = read_csv(here("data_raw",
+                    "202004-capitalbikeshare-tripdata.zip"))
+
+dfMay20 = read_csv(here("data_raw",
+                    "202005-capitalbikeshare-tripdata.zip"))
+
+dfJun20 = read_csv(here("data_raw",
+                    "202006-capitalbikeshare-tripdata.zip"))
+
+dfJul20 = read_csv(here("data_raw",
+                    "202007-capitalbikeshare-tripdata.zip"))
+
+dfAug20 = read_csv(here("data_raw",
+                    "202008-capitalbikeshare-tripdata.zip"))
+
+dfSep20 = read_csv(here("data_raw",
+                    "202009-capitalbikeshare-tripdata.zip"))
+
+dfOct20 = read_csv(here("data_raw",
+                    "202010-capitalbikeshare-tripdata.zip"))
+
+dfNov20 = read_csv(here("data_raw",
+                    "202011-capitalbikeshare-tripdata.zip"))
+
+dfDec20 = read_csv(here("data_raw",
+                    "202012-capitalbikeshare-tripdata.zip"))
+
+dfApr22 = read_csv(here("data_raw",
+                    "202204-capitalbikeshare-tripdata.zip"))
+
+dfMay22 = read_csv(here("data_raw",
+                    "202205-capitalbikeshare-tripdata.zip"))
+
+dfJun22 = read_csv(here("data_raw",
+                    "202206-capitalbikeshare-tripdata.zip"))
+
+dfJul22 = read_csv(here("data_raw",
+                    "202207-capitalbikeshare-tripdata.zip"))
+
+dfAug22 = read_csv(here("data_raw",
+                    "202208-capitalbikeshare-tripdata.zip"))
+
+dfSep22 = read_csv(here("data_raw",
+                    "202209-capitalbikeshare-tripdata.zip"))
+
+dfOct22 = read_csv(here("data_raw",
+                    "202210-capitalbikeshare-tripdata.zip"))
+
+dfNov22 = read_csv(here("data_raw",
+                    "202211-capitalbikeshare-tripdata.zip"))
+
+dfDec22 = read_csv(here("data_raw",
+                    "202212-capitalbikeshare-tripdata.zip"))
+```
+
+Clean and make the data about cumulative riders
+```{r}
+dfAll20 = bind_rows(dfApr20, dfMay20, dfJun20, dfJul20, dfAug20, dfSep20, dfOct20, dfNov20, dfDec20)
+
+dfAll22 = bind_rows(dfApr22, dfMay22, dfJun22, dfJul22, dfAug22, dfSep22, dfOct22, dfNov22, dfDec22)
+
+dfAll20Start = dfAll20 %>% 
+  select(rideable_type,
+         member_casual,
+         contains("start"),
+         ride_id) %>% 
+  mutate(start_stop = "start") %>%
+  rename(t = started_at,
+         station_name = start_station_name,
+         station_id = start_station_id,
+         lat = start_lat,
+         lng = start_lng)
+
+dfAll20End = dfAll20 %>% 
+  select(ride_id,
+         rideable_type,
+         member_casual,
+         contains("end")) %>%
+  mutate(start_stop = "stop") %>%
+  rename(t = ended_at,
+         station_name = end_station_name,
+         station_id = end_station_id,
+         lat = end_lat,
+         lng = end_lng)
+ 
+dfAll20Riders = bind_rows(dfAll20Start,
+                dfAll20End) %>%
+  arrange(t) %>%
+  mutate(rider_delta = (start_stop == "start") *1) %>% # change in ridership 
+  mutate(riders = cumsum(rider_delta)) %>%
+  relocate(riders, .after = t)
+
+dfAll22Start = dfAll22 %>% 
+  select(rideable_type,
+         member_casual,
+         contains("start"),
+         ride_id) %>% 
+  mutate(start_stop = "start") %>%
+  rename(t = started_at,
+         station_name = start_station_name,
+         station_id = start_station_id,
+         lat = start_lat,
+         lng = start_lng)
+
+dfAll22End = dfAll22 %>% 
+  select(ride_id,
+         rideable_type,
+         member_casual,
+         contains("end")) %>%
+  mutate(start_stop = "stop") %>%
+  rename(t = ended_at,
+         station_name = end_station_name,
+         station_id = end_station_id,
+         lat = end_lat,
+         lng = end_lng)
+ 
+dfAll22Riders = bind_rows(dfAll22Start,
+                dfAll22End) %>%
+  arrange(t) %>%
+  mutate(rider_delta = (start_stop == "start") *1) %>% # change in ridership 
+  mutate(riders = cumsum(rider_delta)) %>%
+  relocate(riders, .after = t)
+```
+
+Plot of riders vs time:
+```{r}
+dfAll20Riders %>% 
+  ggplot(aes(t, riders)) +
+  geom_line()
+dfAll22Riders %>% 
+  ggplot(aes(t, riders)) +
+  geom_line()
+```
+
+
+Now we load the taxi data:
+
+```{r}
+dfApr20 = read_csv(here("data_raw",
+                    "taxi_2020_04.zip"))
+
+dfMay20 = read_csv(here("data_raw",
+                    "taxi_2020_05.zip"))
+
+dfJun20 = read_csv(here("data_raw",
+                    "taxi_2020_06.zip"))
+
+dfJul20 = read_csv(here("data_raw",
+                    "taxi_2020_07.zip"))
+
+dfAug20 = read_csv(here("data_raw",
+                    "taxi_2020_08.zip"))
+
+dfSep20 = read_csv(here("data_raw",
+                    "taxi_2020_09.zip"))
+
+dfOct20 = read_csv(here("data_raw",
+                    "taxi_2020_10.zip"))
+
+dfNov20 = read_csv(here("data_raw",
+                    "taxi_2020_11.zip"))
+
+dfDec20 = read_csv(here("data_raw",
+                    "taxi_2020_12.zip"))
+dfApr22 = read_csv(here("data_raw",
+                    "taxi_202204.zip"))
+
+dfMay22 = read_csv(here("data_raw",
+                   "taxi_202205.zip"))
+
+dfJun22 = read_csv(here("data_raw",
+                    "taxi_202206.zip"))
+
+dfJul22 = read_csv(here("data_raw",
+                    "taxi_202207.zip"))
+
+dfAug22 = read_csv(here("data_raw",
+                    "taxi_202208.zip"))
+
+dfSep22 = read_csv(here("data_raw",
+                   "taxi_202209.zip"))
+
+dfOct22 = read_csv(here("data_raw",
+                   "taxi_202210.zip"))
+
+dfNov22 = read_csv(here("data_raw",
+                    "taxi_202211.zip"))
+
+dfDec22 = read_csv(here("data_raw",
+                   "taxi_202211.zip"))
+
+dfAll20 = bind_rows(dfApr20, dfMay20, dfJun20, dfJul20, dfAug20, dfSep20, dfOct20, dfNov20, dfDec20)
+
+dfAll22 = bind_rows(dfApr22, dfMay22, dfJun22, dfJul22, dfAug22, dfSep22, dfOct22, dfNov22, dfDec22)
+```
+
+Plot of total taxi users versus time.
+```{r}
+dfAll20Users = dfAll20 |>
+  mutate(users_delta = (MILEAGE != 0)*1) |>
+  mutate(user = cumsum(users_delta))
+dfAll20Users = dfAll20Users |> 
+  rename(r = user,
+    t = ORIGINDATETIME_TR)
+
+dfAll22Users = dfAll22 |>
+  mutate(users_delta = (MILEAGE != 0)*1) |>
+  mutate(user = cumsum(users_delta))
+dfAll22Users = dfAll22Users |> 
+  rename(r = user,
+    t = ORIGINDATETIME_TR)
+```
+Plot of taxi users vs time:
+```{r}
+dfAll20Users %>% 
+  ggplot(aes(t, r)) +
+  geom_line()
+dfAll22Users %>% 
+  ggplot(aes(t, r)) +
+  geom_line()
+```
+Interactive plot of riders vs time:
+```{r}
+Fig20<- plot_ly(data = dfAll20Riders, x = ~t) |> add_trace(y = ~riders, name = 'Ridership', mode = 'lines')
+Fig20
+
+Fig22<- plot_ly(data = dfAll22Riders, x = ~t) |> add_trace(y = ~riders, name = 'Ridership', mode = 'lines')
+Fig22
+```
+
+Interactive plot with taxi data:
+```{r}
+TFig20<- plot_ly(data = dfAll20Users, x = ~t) |> add_trace(y = ~r, name = 'Taxi ridership', mode = 'lines')
+TFig20
+
+TFig22<- plot_ly(data = dfAll22Users, x = ~t) |> add_trace(y = ~r, name = 'Taxi ridership', mode = 'lines')
+TFig22
+```
