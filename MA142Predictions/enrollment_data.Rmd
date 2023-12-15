@@ -1,0 +1,213 @@
+---
+title: "Experiment003: MA132 Enrollment Analysis"
+date: 10/02/2023
+output: html_notebook
+---
+
+## Group Name: AA - Alexis Alexander and Andy Chen Lin and Minh-Ngoc Huynh
+
+
+
+# Packages
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+library(skimr)
+```
+
+# Get Data from Moodle Page 
+
+Save the download to the "data_raw" directory. The file is saved as an excel sheet and is called  CU_ACAD_DEPT_WHEN_OFF_ENRL.csv.  
+
+## Load the Enrollment data 
+
+```{r}
+thisfile=here("data_raw", "CU_ACAD_DEPT_WHEN_OFF_ENRL.csv")
+df1=read_csv(thisfile) %>% clean_names()
+```
+## Create a New File to Automatically Load the Clean Data 
+
+```{r}
+write_csv(df1,here("data","enrollement_data.csv"))
+```
+
+Here, we take a peak at the data.
+```{r}
+skimr::skim(df1)
+```
+
+
+## Can We Predict Enrollment for MA132 For Spring Semester? 
+
+df1 contains all of the enrollment data for all math class offered 
+df2 contains all of the data relating specifically to MA 132 or MA 131
+We'll be using linear regression with 2 variables, x1 to represent the MA131 enrollment in the previous semester (as they move up to MA132 in the new semester) and x2 the MA132 enrollment for the previous semester.
+
+```{r}
+df2 = df1 |>
+  filter(subject == "MA",
+        catalog %in% c(131, 132),
+        component == "LEC")
+  head(df2)
+```
+## placeholder
+Here, df_cal_1 is the total students in each class each semester. 
+
+```{r}
+df_cal_1 = df2 %>%
+  group_by(term_8, catalog) %>%
+  summarise(total_enrolled = sum(tot_enrl), .groups = 'drop')
+  head(df_cal_1)
+```
+
+We calculate the predicted value for the Spring 2023 MA 132 class to see if the linear regression model is accurate. df3 has all the enrollment statuses sorted by class (132 or 131).
+With the new column spring_enrl, we use the linear regression on the enrollemnt of MA131 and 132 to generate it. This will help us build a more accurate model.
+
+We built 2 models here, lmenroll and lmenroll2. The first one only takes data of previous year's spring MA132 class and MA131 Fall's class to predict the next semester's enrollment. The second, lmenroll2, takes previous year's MA132 spring enrollment, as well as the enrollment of MA132 and Ma131 both in the Fall.
+
+Here, I'm seperating the enrollment of the class and saving 131 to x1 and 132 to x2. Additionally, remove the catalog number to make the data more easy to see. Finally, I rename the enrollment columns and join them into df3.
+
+Additionally, I made a temporary dataframe that has only spring enrollment of MA132. This is to compare it to the predicted values to see how accurate it is. 
+
+```{r}
+x1 = df_cal_1 |> 
+  filter(catalog == "131")
+x1 = x1[-c(2)]
+colnames(x1)[2] ="MA131_enrl"
+head(x1)
+  
+x2 = df_cal_1 |> 
+  filter(catalog == "132")
+x2 = x2[-c(2)]
+colnames(x2)[2] ="MA132_enrl"
+  head(x2)
+  
+temp = x2 |> filter (term_8 == "Spring 2015"| term_8== "Spring 2016" |term_8== "Spring 2017"| term_8== "Spring 2018"|term_8== "Spring 2019"|term_8== "Spring 2020"|term_8== "Spring 2021"|term_8== "Spring 2022"|term_8== "Spring 2023")
+temp = temp[-c(1)]
+
+for (x in 1:12){
+  rows=nrow(temp)
+  temp[rows+1,] <- NA
+}
+colnames(temp)[1] ="spring_enrl"
+
+df3 = merge(x1, x2, by = "term_8")
+df3 = cbind(df3, temp)
+df3 = df3[-c(20, 21),]
+
+lmenroll2 = lm(spring_enrl~ MA132_enrl + MA131_enrl, data = df3)
+summary(lmenroll2)
+
+lmenroll = lm(MA132_enrl~ MA132_enrl + MA131_enrl, data = df3)
+summary(lmenroll)
+
+```
+With the two estimations, we have 2 functions that we can use, one takes only MA131 Fall semester's enrollment and one takes MA131 and MA132 Fall semester enrollments.
+
+next_semester_enrollment = -253.2161+1.0233(MA131_students)+1.0435(MA132_students)
+
+or
+
+MA132_students = -0.56852(MA131_students) + 438.99233
+
+Now we plot the line:
+
+```{r}
+
+ggplot(df3, aes(x = MA131_enrl, y= MA132_enrl)) +geom_point() + stat_smooth(method = "lm", col = "blue")
+```
+We can see the line fits the model, but the graph doesn't really give values for predicted enrollment. We can, however, visualize the error by seeing this graph.
+
+I took the Fall 2022 enrollment from MA131 (337 students) and MA132 (145 students) and put it into our two models.
+Now we use the functions and test if they are correct for Spring 2023 MA132 enrollment:
+```{r}
+students <- -253.2161+1.0233*(337)+1.0435*(145)
+students2 = -0.56852*337 + 438.99233
+prediction <- (students + students2)/2
+
+error <- prediction - 246
+```
+
+Here, we have an error value of 1 student, which is pretty small. Suppose a section has a maximum of 100 seats, in Spring 2022, there would be 2 sections with an error of +-1.
+With the small error, we can confirm that the model will work for Spring 2023. But this is the average model since we added the two formula predictions and divided it by 2.
+
+We can see that the linear regression function that takes 1 variable is more accurate than the one that takes 2 by a big amount.
+
+Now we calculate for Spring 2024:
+
+```{r}
+students_2024 <- -253.2161+1.0233*(523)+1.0435*(149)
+students_20242 = -0.56852*523 + 438.99233
+prediction2 <- (students_2024 + students_20242)/2
+
+df3 <- mutate(df3, predicted_enrl1 = -253.2161+1.0233*MA131_enrl+1.0435*MA132_enrl)
+df3 <- mutate(df3, predicted_enrl2 = -0.56852*MA131_enrl + 438.99233)
+dferror = head(df3, 9)
+
+lmerror1 = mean((dferror$spring_enrl - dferror$predicted_enrl1))
+
+lmerror2 = mean((dferror$spring_enrl - dferror$predicted_enrl2))
+```
+
+We predicted a total of 437 students will enroll in MA 132 in the spring of 2024. With an error of 0.005 (using the 2nd model that takes 2 inputs).
+Or a total of 142 students with an error of 223 students (which is enough to make another 2 sections) using the first model. With such a large amount of error, we will not average the two predictions.
+
+Here, we will take the value from the first prediction to make sections. If one section has 100 students, then Spring 2024 will have a total of 4 (+-1) sections if there will be 100 students in each section.
+
+
+
+
+
+
+
+
+
+enrollment_model = lm(formula = "dependent variable -> MA132 enrollment in the Spring" ~ "independent variable -> MA131 and MA132 enrollment in the Fall)
+
+in df_cal_1 -> group based on term
+need to separate MA132 in the Spring from everything else
+The remaining terms in MA131 and MA132 will be used as the independent variables in the regression 
+
+
+## Notes 
+
+How to predict spring 2024 for MA132? Decide how many courses to offer, how many students will enroll?
+MA132 - Calculus II normally is offered in the Spring - most in the cohort from MA131 in the Fall 
+Some take MA132 in the Spring if they fell in MA131 
+Some students join the University in the Spring Semester and have to take MA132 
+Predict MA132 enrollment - want to build that can predict based on previous values (Regression model)
+More than one predictor variable (x1, x2) and use that to predict the response variable (y); each row represents an observation 
+
+MA131 Fall Enrollment from previous semester and MA132 Fall semester before students for predictor variables
+look at data for MA131 and MA132 
+Enrollment by sections 
+
+
+# Fit the multiple linear regression model, get the model residuals, and plot the result 
+Here, we apply the linear regression model to get the coefficients:
+
+Original code: 
+enrollment_model = lm(formula = catalog == "132" ~ catalog == c("132", "131"), data = df_cal_1)
+model_residuals = enrollment_model$residuals
+hist(model_residuals)
+
+# Plotting data on a Normal Q-Q plot, if there are nornality, then the values should follow a straight line . Plot the residuals and the Q-Q line 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
