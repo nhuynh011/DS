@@ -1,0 +1,260 @@
+---
+title: "Replacement Class - Introduction to spatial data"
+date:  "2023-11-12"
+author: "Minh Ngoc Huynh"
+output: html_notebook
+---
+
+Today's class will be on geographic data and how we can make an interactive map that displays a certain population or rate of something of a location.
+
+## Packages
+Standards:
+
+```{r}
+library(knitr)
+library(tidyverse)
+library(janitor)
+library(lubridate) # because we will probably see some dates
+library(here) # more easily access files in your project
+```
+
+Some additional packages focuses on today's work:
+
+```{r}
+library(sf) # working with simple features - geospatial
+library(tmap)
+library(tidycensus)
+
+```
+A link to a book on `tmap`: https://r-tmap.github.io/
+
+
+## Using the Neighborhood Geospatial Data (using /data)
+
+Using geojson data, which is geometric information.
+
+https://opendata.dc.gov/datasets/DCGIS::dc-health-planning-neighborhoods/about
+
+
+## Using the Neighborhood Geospatial Data (using /data)
+
+Load the neighborhood geospatial data as `neigh`.
+```{r}
+neigh = st_read(here("data_raw", "DC_Health_Planning_Neighborhoods.geojson")) |> clean_names()
+```
+Usually these types of things have built in things that you can plot so you don't need to label x and y.
+
+Ensure it plots.
+
+```{r}
+plot(neigh)
+```
+Here we get many different colored plots depending on what category of neigh we wanted to see. The categories are columns labels. We kinda don't need this data though, we will be working on joining next. Unfortunately, these plots are not interactive.
+
+## Investigating joining spatial and non-spatial data
+
+Download the DC covid datase for positive cases and store at an appropriate place in your project.
+I'll also put it in data_raw folder.
+Read the data as `df_c` and be sure to clean names (https://opendata.dc.gov/datasets/62f6f28dbfc74ae489fa3dcda9e94744_28/explore).
+
+```{r}
+df_c = st_read(here("data_raw", "DC_COVID-19_Total_Positive_Cases_by_Neighborhood.csv")) |> clean_names()
+```
+
+Now - let's focus on a particular date (for no reason other than simplifying our analysis).
+We're joining spacial and non-spacial data.
+
+```{r}
+df_covid1010 = df_c |> filter(as_date(date_reported) == "2020-10-10")
+```
+
+
+Create the dataframe `df_cases`:
+We're joining spacial and non-spacial data.
+
+The reason we're seperating the neighborhood columns is because it has something we need that matches with the neigh data that we have: the neighborhood code. So we can join by a specific item with join.
+```{r}
+df_cases=df_c %>%
+  filter(as_date(date_reported) == "2020-10-10") %>% 
+  separate(neighborhood,into=c("code","name"),sep = ":") %>%
+  mutate(code=case_when(code=="N35" ~"N0",
+                        TRUE ~ code)) %>%
+  select(-date_reported)
+ 
+```
+
+## Regular joining (of dataframes)
+Left join data frame. R Notebook won't let me save if I have nothing to write here. How stupid. It doesn't recognize the blue lettering on top of this paragraph?
+```{r}
+neigh2 = left_join(neigh, df_cases, by = c("code"))
+
+tmap_mode("view") #lets us set the mode for tmap plot to make it so we can interact with it
+tm_shape(neigh2) +tm_polygons("total_positives", alpha=.5)
+```
+
+Join the dataframes and make a chloropleth map using tmap.
+I have each district plotted, as well as the amount of positive cases for each area by code. On my pc, I don't see any colors. 
+The map is fully interactive (thanks to leaflet) and we can see the street and buildings. So it's very good and useful.
+
+## Joining with other spatial data
+
+Let's get some data using `tidycensus`.  Need an API key   https://api.census.gov/data/key_signup.html
+Ran this command:
+census_api_key("4cf19da14d375da0e561c719f97fc65758daedfc", install = TRUE)
+
+
+ What data is available --- and what is the variable name?
+ 
+ (We are interested in the 5year American Community Survey.)
+ 
+ We used tidycensus to access the census data and then we now have to generate a key to access this.
+
+```{r}
+v20 = load_variables(2018, "acs5")
+
+```
+
+Get some data:
+```{r}
+df_cencus=get_acs(geography = "tract",
+                  variables=c("median_income"="B06011_001",
+                              "population"="B01001_001",
+                              "population_black"="B02009_001"),
+                  state="DC",geometry=TRUE,year=2021) 
+```
+get_acs uses tidycensus package to get the data from the American Community Survey, and we are pulling from the geography level "tract". The rest of the variables are what we call them, and the codes are what the columns are from the big data lab. WE want the polygons to plot with tm_geom.
+
+Make a plot to verify that you read the data:
+
+```{r}
+class(df_cencus)
+plot(df_cencus)
+```
+Plotting to see that it works
+
+### A BETTER VISUALIZATION
+It's in long format, it takes the data and its measure of error and gets rid of it. Then we pivot our data to make new columns.  Let's make it wide.
+```{r}
+df_cens=df_cencus %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", 
+              values_from = "estimate")
+  
+ 
+
+tm_shape(df_cens) +tm_polygons("median_income",alpha=.5)
+```
+
+So we can use this map to see where the biggest income is.
+
+### How to join
+
+Consider this problem:
+
+```{r}
+  tm_shape(neigh2) +tm_borders(col="blue",lwd=5,alpha=.2)+
+  tm_shape(df_cens) +tm_borders(col="red",lwd=1,alpha=.3)
+```
+A neighborhood is much larger than a cencus tract. Neighboorhoods include many tracts and it seems like they don't overlap too much.
+
+OK - follow the challenging code elements:
+
+This type of join is way different, you need to spacially join things
+```{r}
+#Not supposed to work
+#df_j=st_join(df_cens,neigh2)
+
+```
+This gives us an error, and we want them to match it by a category. The census tract data doesn't have a neighboorhood code, so it doesn't work.
+You need to add a coordinate system to the census data:
+
+```{r}
+df_cens_adj = df_cens |> st_transform(4326) #what is this???  transforms the coordinates to be long lat pairs
+```
+
+
+
+But which way do we join --- and --- think about how it should "aggregate" the data.
+
+```{r}
+df_j = st_join(df_cens_adj, neigh2, largest = TRUE)
+```
+
+The other order:
+```{r}
+df_j_rev = st_join(neigh2, df_cens_adj, largest = TRUE)
+```
+
+Since we want the geometry for the NEIGHBORHOODS, we need a different work a little harder:
+
+```{r}
+df1=df_j %>% select(median_income, population, population_black, code) %>%
+  group_by(code) %>%
+  summarise(population_n=sum(population),
+            pop_black_n=sum(population_black), 
+            adj_median_income=sum(population*median_income)/population_n) 
+
+plot(df1)
+```
+
+
+Now that we are aggregating in the right way, we can join.
+
+```{r}
+#df2=left_join(neigh2,df1)
+
+df2=left_join(neigh2,df1 %>% st_set_geometry(NULL))
+class(df2)
+```
+
+And visualize:
+for some reason, total positives was read in as a class, changing that.
+```{r}
+df2 <- transform(df2, total_positives = as.numeric(total_positives))
+df2=df2 %>% mutate(black_perc = pop_black_n/population_n,
+                   covid_rate = total_positives/population_n)
+tm_shape(df2)+tm_polygons(c("adj_median_income","covid_rate","black_perc"))
+```
+
+
+Improve that visualization:
+
+```{r}
+df2 |> filter(code != "N0")|>
+  tm_shape()+tm_polygons(c("adj_median_income","covid_rate","black_perc"))
+```
+We filtered out N0 because it's the mall area. NOt a lot of people live there.
+Visualize something using crime data with demographics related to DC neighborhoods or other spatial domain.
+
+
+Visualize something using bgfs feed data and spatial information.
+### Revised from Monday's lecture:
+We now look into geospacial crime data in DC, downloaded from here: https://opendata.dc.gov/explore?collection=Dataset
+
+```{r}
+crime=st_read(here("data_raw", "Crime_Incidents_in_2021.geojson")) %>% clean_names()
+class(crime)
+crime_sf = crime %>% st_transform(4326)
+crime_sf_reduced = crime %>%
+  slice_head(n=1000)
+```
+
+Now like before, we try to make a new interactive map for the different types of crime:
+
+```{r}
+tmap_mode("view")
+crime_adj = crime_sf |> st_transform(4326)
+crime_test1 =  st_join(crime_adj, neigh, largest = TRUE)
+
+#Aftewr this it doesnt work
+crime_sfmap = st_join(neigh, crime_test1, largest = TRUE)
+tm_shape(crime_test1)+tm_polygons("offense")
+```
+
+Here, this map shows which crime is most common in which area for the first 1000 rows in the crimes dataset. I want crime rate which is the amount of crimes divided by how many people live there.
+
+```{r}
+crime_pop = st_join(crime_sf_reduced, neigh2, largest = TRUE)
+  crime_sf |> count(offense, name)
+
+```
