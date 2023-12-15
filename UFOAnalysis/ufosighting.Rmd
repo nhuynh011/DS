@@ -1,0 +1,64 @@
+---
+title: "UFO Sightings"
+output: html_notebook
+author: Minh Ngoc Huynh, Tomas Gifford, Amity Ramona Mentis-Cort
+---
+
+We plan to analyse global UFO sightings with a country's development to see if there is a relationship between the two. For this analysis, a country's "development" is quantified by its GDP per capita to account for the amount of people in the country.
+
+Data from: <https://www.kaggle.com/datasets/NUFORC/ufo-sightings> <https://ourworldindata.org/grapher/gdp-per-capita-worldbank> <https://ourworldindata.org/grapher/land-area-km>
+<https://www.census.gov/data-tools/demo/idb/#/table?COUNTRY_YEAR=2023&COUNTRY_YR_ANIM=2023&menu=tableViz&quickReports=OVW&CCODE_SINGLE=**&TABLE_YEARS=2021&TABLE_USE_RANGE=N&TABLE_USE_YEARS=Y&TABLE_STEP=1&TABLE_ADD_YEARS=2021>
+
+We will use the following R packages:
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+
+ufo <- read_csv(here("rawdata", "ufo-sightings-transformed.csv")) |> clean_names()
+development <- read_csv(here("rawdata", "gdp-per-capita-worldbank.csv")) |> clean_names()
+area <- read_csv(here("rawdata", "land-area-km.csv")) |> clean_names()
+area <- area|>filter(year == 2020)
+
+ggplot(ufo, aes(longitude, latitude)) + geom_point()
+
+```
+
+Interactive world map of sightings: Click on a country to view its sightings!
+
+```{r}
+library(sf)
+library(tmap)
+data(World)
+country<- World |> rename(country = name)
+sightingsCount<- count(ufo, country, sort = TRUE) |> na.omit(sightingsCount)
+sightingsByCountry <- merge(x = country, y = sightingsCount, by = "country", all.y = TRUE) |>
+  rename(sightings = n)
+sightingsByCountry<- na.omit(sightingsByCountry)
+
+tmap_mode("view")
+
+tm_shape(sightingsByCountry) +tm_fill("sightings",alpha=0.8, palette = c("black", "cyan"), style = "hclust")
+```
+
+Filter out United States sightings and plotted it.
+
+```{r}
+USA_sightings <- filter(ufo,country_code=="USA")
+ggplot(USA_sightings,aes(longitude, latitude)) + geom_point()
+```
+
+Interactive world map of sightings per area: Click on a country to view its sightings!
+
+```{r}
+area <- area |> rename(country = entity)
+sightingsCount <- merge(x = area, y = sightingsCount, by = "country") |>
+  na.omit()
+sightingsByAreaPerCountry<-sightingsCount|>mutate(pos = n/land_area_sq_km)
+sightingsByAreaPerCountry<- merge(x = country, y = sightingsByAreaPerCountry, by = "country", all.y = TRUE) |>   na.omit()
+
+tmap_mode("view")
+
+tm_shape(sightingsByAreaPerCountry) +tm_fill("pos",alpha=0.8, palette = c("black", "cyan"), style = "hclust")
+```
