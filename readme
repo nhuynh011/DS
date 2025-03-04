@@ -1,5 +1,8 @@
-All the projects I've done in 2023.
-Includes projects from DS241 and STAT383 at Clarkson University.
+All the projects I've done in 2023 classes DS241 and STAT 383.
 
+MA142 predictions: Made a model using linear regression to predict the amount of students in class Calculus II for the Spring semester. Used previous semester's data on students that failed Calculus II and students that passed Calculus I.
+
+
+To do:
 - Need to add links to original repos
 - Need to add links to people who worked on the projects with me
